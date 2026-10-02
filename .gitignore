@@ -1,0 +1,14 @@
+.wrangler/
+
+backup-live/
+custom-live/
+backup-root/
+custom-root/
+custom-disk/
+
+cubic.conf
+
+partition-1.img
+partition-2.img
+
+*.iso
