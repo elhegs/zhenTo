@@ -85,7 +85,7 @@ cleanup() {
     local m
     set +e
     if [ -d "$ROOT_DIR" ]; then
-        for m in run sys proc dev/pts dev; do
+        for m in cdrom run sys proc dev/pts dev; do
             if mountpoint -q "$ROOT_DIR/$m" 2>/dev/null; then
                 umount -R "$ROOT_DIR/$m" 2>/dev/null || umount -l "$ROOT_DIR/$m" 2>/dev/null
             fi
@@ -239,6 +239,13 @@ patch_layer() {
     mount --bind /proc "$ROOT_DIR/proc"
     mount --bind /sys "$ROOT_DIR/sys"
     mount -t tmpfs tmpfs "$ROOT_DIR/run"
+
+    # 镜像自带 file:/cdrom 的 apt 源（离线安装仓库），chroot 里没有 /cdrom 会让
+    # apt update 直接失败；把 ISO 树挂进去，既修好索引又能用上离线仓库
+    if [ -d "$ISO_DIR/dists" ]; then
+        install -d "$ROOT_DIR/cdrom"
+        mount --bind "$ISO_DIR" "$ROOT_DIR/cdrom"
+    fi
 
     # chroot 内的 resolv.conf 通常是 systemd-resolved 的软链，先换成真实文件
     if [ -L "$ROOT_DIR/etc/resolv.conf" ]; then
