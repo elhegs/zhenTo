@@ -212,8 +212,8 @@ patch_layer() {
     comp=${SQUASHFS_COMP:-$comp}
     block=${SQUASHFS_BLOCK:-$block}
 
-    # 空间检查：解包体积 + 新层 + 输出 ISO
-    need=$(( $(stat -c%s "$sfs") * 3 / 2 + $(stat -c%s "$BASE_ISO") ))
+    # 空间检查：解包体积 + 新层（基础 ISO 已在磁盘上，不重复计入）
+    need=$(( $(stat -c%s "$sfs") * 3 / 2 ))
     if [ -f "$size_file" ]; then
         need=$(( need + $(tr -d '\n' < "$size_file") ))
     fi
