@@ -4,6 +4,12 @@
 # App-Maintainer: Oliver Lin <oliver@liuxiaozhen.dev>
 # SPDX-License-Identifier: AGPL-3.0-only
 
+# check users
+if [ "$EUID" -ne 0 ]; then
+    echo "No root! exit!"
+    exit 1
+fi
+
 copy_usr(){
     cp -f os-release /usr/lib/os-release || { echo "copy fail error!" >&2; exit 1; }
 }
