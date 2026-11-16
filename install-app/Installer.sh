@@ -46,7 +46,7 @@ UNIT=/etc/systemd/system/zhento-install-snap.service
 install -d -m 0755 "$SNAP_STORE"
 install -m 0644 "$WORK_DIR/$SNAP_FILE" "$SNAP_STORE/$SNAP_FILE"
 
-cat > "$UNIT" <<EOS
+cat >"$UNIT" <<EOS
 [Unit]
 Description=Install preinstalled snap: ${SNAP_NAME}
 After=snapd.service

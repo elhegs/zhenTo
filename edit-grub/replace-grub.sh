@@ -42,9 +42,15 @@ fi
 
 # Back up the original file for rollback on error
 backup="${target}.bak.$(date +%Y%m%d%H%M%S)"
-cp -a "$target" "$backup" || { echo "backup fail error!" >&2; exit 1; }
+cp -a "$target" "$backup" || {
+    echo "backup fail error!" >&2
+    exit 1
+}
 
-cp -f grub.cfg "$target" || { echo "copy fail error!" >&2; exit 1; }
+cp -f grub.cfg "$target" || {
+    echo "copy fail error!" >&2
+    exit 1
+}
 sync
 
 echo "Backed up to: $backup"

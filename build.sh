@@ -45,9 +45,12 @@ EFI_IMG="$WORK_DIR/efi.img"
 
 RESOLV_RESTORE=""
 
-log()  { printf '\n==> %s\n' "$*"; }
+log() { printf '\n==> %s\n' "$*"; }
 warn() { printf '!!  %s\n' "$*" >&2; }
-die()  { printf 'XX  %s\n' "$*" >&2; exit 1; }
+die() {
+    printf 'XX  %s\n' "$*" >&2
+    exit 1
+}
 
 human() {
     awk -v b="$1" 'BEGIN { printf "%.1fG", b / 1024 / 1024 / 1024 }'
@@ -126,7 +129,7 @@ write_chroot_helpers() {
     local bin="$ROOT_DIR/opt/zhento-build/bin"
     install -d "$bin"
 
-    cat > "$bin/zhento-flatpak" <<'EOS'
+    cat >"$bin/zhento-flatpak" <<'EOS'
 #!/bin/sh
 # Build-time flatpak preinstall: zhento-flatpak <app-id> [...]
 set -e
@@ -147,7 +150,7 @@ for id in "$@"; do
 done
 EOS
 
-    cat > "$bin/zhento-snap" <<'EOS'
+    cat >"$bin/zhento-snap" <<'EOS'
 #!/bin/sh
 # Build-time snap preinstall: snapd is not running inside chroot, so we write the seed
 # instead of running "snap install".
@@ -210,7 +213,10 @@ apply_os_release() {
     local src="$SELF_DIR/edit-os-release"
     local dst=/opt/zhento-build/edit-os-release
 
-    [ -d "$src" ] || { warn "edit-os-release/ is missing, skipping os-release"; return 0; }
+    [ -d "$src" ] || {
+        warn "edit-os-release/ is missing, skipping os-release"
+        return 0
+    }
 
     log "Writing os-release"
     rm -rf "$ROOT_DIR$dst"
@@ -225,8 +231,14 @@ apply_grub() {
     local src="$SELF_DIR/edit-grub"
     local dst="$ISO_DIR/boot/grub/grub.cfg"
 
-    [ -f "$src/grub.cfg" ] || { warn "edit-grub/grub.cfg is missing, skipping boot menu"; return 0; }
-    [ -f "$dst" ] || { warn "boot/grub/grub.cfg not found in ISO tree, skipping boot menu"; return 0; }
+    [ -f "$src/grub.cfg" ] || {
+        warn "edit-grub/grub.cfg is missing, skipping boot menu"
+        return 0
+    }
+    [ -f "$dst" ] || {
+        warn "boot/grub/grub.cfg not found in ISO tree, skipping boot menu"
+        return 0
+    }
 
     log "Replacing boot menu grub.cfg"
     sh "$src/replace-grub.sh" "$dst" || die "Failed to replace grub.cfg"
@@ -254,9 +266,9 @@ patch_layer() {
     block=${SQUASHFS_BLOCK:-$block}
 
     # Space check: unpacked size + new layer (base ISO is already on disk, not counted twice)
-    need=$(( $(stat -c%s "$sfs") * 3 / 2 ))
+    need=$(($(stat -c%s "$sfs") * 3 / 2))
     if [ -f "$size_file" ]; then
-        need=$(( need + $(tr -d '\n' < "$size_file") ))
+        need=$((need + $(tr -d '\n' <"$size_file")))
     fi
     avail=$(df -Pk "$WORK_DIR" | awk 'NR==2{print $4 * 1024}')
     if [ "$avail" -lt "$need" ]; then
@@ -265,7 +277,7 @@ patch_layer() {
 
     log "Unpacking $layer ($comp / ${block} block)"
     rm -rf "$ROOT_DIR"
-    unsquashfs -no-progress -d "$ROOT_DIR" "$sfs" > /dev/null
+    unsquashfs -no-progress -d "$ROOT_DIR" "$sfs" >/dev/null
 
     log "Preparing chroot"
     install -d "$ROOT_DIR/opt/zhento-build" "$ROOT_DIR/dev" "$ROOT_DIR/dev/pts" \
@@ -298,7 +310,7 @@ patch_layer() {
     cp -f /etc/resolv.conf "$ROOT_DIR/etc/resolv.conf"
 
     # Prevent postinst from starting services inside the chroot
-    printf '#!/bin/sh\nexit 101\n' > "$ROOT_DIR/usr/sbin/policy-rc.d"
+    printf '#!/bin/sh\nexit 101\n' >"$ROOT_DIR/usr/sbin/policy-rc.d"
     chmod 0755 "$ROOT_DIR/usr/sbin/policy-rc.d"
 
     log "Running build.sh --apps-only inside chroot"
@@ -332,9 +344,9 @@ patch_layer() {
 
     # Update the layer size (casper uses it to compute the memory needed by the overlay)
     if [ -f "$size_file" ]; then
-        old_size=$(tr -d '\n' < "$size_file")
+        old_size=$(tr -d '\n' <"$size_file")
         new_size=$(du -sb "$ROOT_DIR" | cut -f1)
-        printf '%s\n' "$new_size" > "$size_file"
+        printf '%s\n' "$new_size" >"$size_file"
         sed -i "s/^  size: ${old_size}$/  size: ${new_size}/" \
             "$ISO_DIR/casper/install-sources.yaml"
     fi
@@ -351,7 +363,7 @@ main() {
 
     [ "$(id -u)" -eq 0 ] || die "root is required (chroot / mount): sudo $0"
     for c in xorriso unsquashfs mksquashfs rsync dd awk; do
-        command -v "$c" > /dev/null || die "Missing command: $c"
+        command -v "$c" >/dev/null || die "Missing command: $c"
     done
     [ -f "$BASE_ISO" ] || die "Base ISO not found: $BASE_ISO"
 
@@ -360,18 +372,18 @@ main() {
     mkdir -p "$ISO_DIR"
 
     log "Extracting ISO tree to $ISO_DIR"
-    xorriso -osirrox on:auto_chmod_on -indev "$BASE_ISO" -extract / "$ISO_DIR" > /dev/null
+    xorriso -osirrox on:auto_chmod_on -indev "$BASE_ISO" -extract / "$ISO_DIR" >/dev/null
 
-    [ -f "$ISO_DIR/casper/install-sources.yaml" ] || \
+    [ -f "$ISO_DIR/casper/install-sources.yaml" ] ||
         die "This ISO has no casper/install-sources.yaml; it is not a supported Ubuntu desktop image"
 
     # Extract the FAT partition used for UEFI boot (the original disc uses an "appended partition",
     # not an efi.img file)
     log "Extracting EFI boot partition"
     report=$(LC_ALL=C xorriso -indev "$BASE_ISO" -report_el_torito as_mkisofs 2>/dev/null)
-    interval=$(printf '%s\n' "$report" \
-        | sed -n "s/.*--interval:local_fs:\([0-9][0-9]*\)d-\([0-9][0-9]*\)d.*/\1 \2/p" \
-        | head -n1)
+    interval=$(printf '%s\n' "$report" |
+        sed -n "s/.*--interval:local_fs:\([0-9][0-9]*\)d-\([0-9][0-9]*\)d.*/\1 \2/p" |
+        head -n1)
     [ -n "$interval" ] || die "Cannot parse EFI partition location from base ISO"
     start=${interval% *}
     end=${interval#* }
@@ -385,7 +397,7 @@ main() {
         [ -n "$layer" ] || die "Cannot determine the default install source from install-sources.yaml"
         layer_list=("$layer")
     else
-        read -r -a layer_list <<< "$PATCH_LAYERS"
+        read -r -a layer_list <<<"$PATCH_LAYERS"
     fi
 
     log "Layers to modify: ${layer_list[*]}"
@@ -405,14 +417,14 @@ main() {
     log "Rebuilding md5sum.txt"
     (
         cd "$ISO_DIR"
-        find . -type f ! -name md5sum.txt -print0 \
-            | sort -z \
-            | xargs -0 md5sum > md5sum.txt
+        find . -type f ! -name md5sum.txt -print0 |
+            sort -z |
+            xargs -0 md5sum >md5sum.txt
     )
 
-    need=$(( $(du -sb "$ISO_DIR" | cut -f1) * 105 / 100 ))
+    need=$(($(du -sb "$ISO_DIR" | cut -f1) * 105 / 100))
     avail=$(df -Pk "$OUT_DIR" | awk 'NR==2{print $4 * 1024}')
-    [ "$avail" -ge "$need" ] || \
+    [ "$avail" -ge "$need" ] ||
         die "Not enough space in output directory: need about $(human "$need"), available $(human "$avail")"
 
     log "Generating UEFI-only ISO: $ISO_NAME"
@@ -429,14 +441,14 @@ main() {
 
     (
         cd "$OUT_DIR"
-        md5sum "$ISO_NAME" > "zhenTo-${VERSION}-amd64.md5"
+        md5sum "$ISO_NAME" >"zhenTo-${VERSION}-amd64.md5"
     )
 
     log "Done"
     printf '  ISO : %s (%s)\n' "$OUT_DIR/$ISO_NAME" "$(human "$(stat -c%s "$OUT_DIR/$ISO_NAME")")"
     printf '  MD5 : %s\n' "$OUT_DIR/zhenTo-${VERSION}-amd64.md5"
-    xorriso -indev "$OUT_DIR/$ISO_NAME" -report_el_torito plain 2>/dev/null \
-        | grep 'El Torito boot img' || true
+    xorriso -indev "$OUT_DIR/$ISO_NAME" -report_el_torito plain 2>/dev/null |
+        grep 'El Torito boot img' || true
 
     if [ "$KEEP_WORK" = "1" ]; then
         log "Keeping intermediate files: $WORK_DIR"

@@ -20,11 +20,17 @@ fi
 
 # follow the symlink: write to the real file /etc/os-release points to
 if [ -L /etc/os-release ]; then
-    target=$(readlink -f /etc/os-release) || { echo "readlink fail error!" >&2; exit 1; }
+    target=$(readlink -f /etc/os-release) || {
+        echo "readlink fail error!" >&2
+        exit 1
+    }
 else
     target=/etc/os-release
 fi
 
-cp -f os-release "$target" || { echo "copy fail error!" >&2; exit 1; }
+cp -f os-release "$target" || {
+    echo "copy fail error!" >&2
+    exit 1
+}
 
 echo "Done! Edit os-release OK!"
