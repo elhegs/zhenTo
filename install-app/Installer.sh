@@ -8,7 +8,8 @@
 
 set -e
 
-# 依赖脚本按自身所在目录定位，避免调用方 cwd 不是本目录时找不到
+# Locate dependent scripts by the script's own directory, so they are still found
+# when the caller's cwd is not this directory.
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 
 # Dependent projects
@@ -27,7 +28,7 @@ curl -fL -o "$WORK_DIR/$SNAP_FILE.sha256" "$BASE_URL/$SNAP_FILE.sha256"
 
 SNAP_NAME="ubuntu-desktop-bootstrap"
 
-# snapd 正在运行（真实系统）：直接安装
+# snapd is running (real system): install directly
 if [ -S /run/snapd.socket ]; then
     if snap list "$SNAP_NAME" >/dev/null 2>&1; then
         snap remove "$SNAP_NAME"
@@ -36,15 +37,16 @@ if [ -S /run/snapd.socket ]; then
     exit 0
 fi
 
-# chroot 内 snapd 未运行，且本地 --dangerous 的 snap 无法写 seed 预置：
-# 把 snap 留在镜像里，首次开机由 systemd 单元安装，装完自动清理并自禁用
+# snapd is not running inside chroot, and a locally --dangerous snap cannot be seeded:
+# leave the snap in the image and let a systemd unit install it on first boot; the unit
+# cleans up and disables itself after installing.
 SNAP_STORE=/var/lib/zhento/snaps
 UNIT=/etc/systemd/system/zhento-install-snap.service
 
 install -d -m 0755 "$SNAP_STORE"
 install -m 0644 "$WORK_DIR/$SNAP_FILE" "$SNAP_STORE/$SNAP_FILE"
 
-cat > "$UNIT" <<EOS
+cat >"$UNIT" <<EOS
 [Unit]
 Description=Install preinstalled snap: ${SNAP_NAME}
 After=snapd.service

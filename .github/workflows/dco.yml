@@ -1,11 +1,11 @@
 name: DCO
 
-# 每次 push 与 PR 都检查提交的 Signed-off-by 签名。
-# 规则：
-#   1. 每个非合并提交必须带 "Signed-off-by: Name <email>" 尾注
-#   2. 签名的邮箱必须与提交作者或提交者邮箱一致
-#   3. 不接受隐私转发邮箱（*noreply*，如 GitHub/GitLab 的 noreply 地址）
-# 在仓库分支保护里把 signed-off-by 设为必需检查即可强制生效。
+# Check the Signed-off-by trailer on every push and PR.
+# Rules:
+#   1. Every non-merge commit must carry a "Signed-off-by: Name <email>" trailer
+#   2. The sign-off email must match the commit author or committer email
+#   3. Privacy forwarding emails (*noreply*, e.g. GitHub/GitLab noreply addresses) are not allowed
+# Mark signed-off-by as a required check in branch protection to enforce it.
 
 on:
   push:
@@ -24,12 +24,12 @@ jobs:
   signed-off-by:
     runs-on: ubuntu-24.04
     steps:
-      - name: 检出代码
+      - name: Checkout code
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
 
-      - name: 检查 Signed-off-by
+      - name: Check Signed-off-by
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -42,31 +42,31 @@ jobs:
 
           zero="0000000000000000000000000000000000000000"
 
-          # 计算需要检查的提交范围
+          # Compute the commit range to check
           if [ "$EVENT_NAME" = "pull_request" ]; then
             rev_args=("${PR_BASE_SHA}..${PR_HEAD_SHA}")
-            scope="PR 中新增的提交"
+            scope="commits added in this PR"
           elif [ "${PUSH_BEFORE}" != "$zero" ] && git cat-file -e "${PUSH_BEFORE}^{commit}" 2>/dev/null; then
             rev_args=("${PUSH_BEFORE}..${PUSH_AFTER}")
-            scope="本次 push 的提交"
+            scope="commits from this push"
           elif git rev-parse --verify --quiet "origin/${DEFAULT_BRANCH}" >/dev/null; then
-            # 新建分支：与默认分支分叉点之后的提交
+            # New branch: commits after the divergence point from the default branch
             rev_args=("origin/${DEFAULT_BRANCH}..${PUSH_AFTER}")
-            scope="新分支相对 ${DEFAULT_BRANCH} 的提交"
+            scope="commits on the new branch relative to ${DEFAULT_BRANCH}"
           else
             rev_args=(-n 1 "${PUSH_AFTER}")
-            scope="本次 push 的最新提交"
+            scope="the latest commit of this push"
           fi
 
-          echo "检查范围：${scope}（${rev_args[*]}）"
+          echo "Scope: ${scope} (${rev_args[*]})"
 
           list=$(mktemp)
           git rev-list --no-merges "${rev_args[@]}" > "$list"
           mapfile -t commits < "$list"
           rm -f "$list"
           if [ "${#commits[@]}" -eq 0 ]; then
-            echo "没有需要检查的提交"
-            { echo "## DCO"; echo; echo "没有需要检查的提交（${scope}）。"; } >> "$GITHUB_STEP_SUMMARY"
+            echo "No commits to check"
+            { echo "## DCO"; echo; echo "No commits to check (${scope})."; } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
@@ -89,7 +89,7 @@ jobs:
             problems=()
 
             if [ "${#sob_emails[@]}" -eq 0 ]; then
-              problems+=("缺少 Signed-off-by 尾注（可用 git commit -s 自动添加）")
+              problems+=("Missing Signed-off-by trailer (add it with 'git commit -s')")
             else
               matched=0
               for email in "${sob_emails[@]}"; do
@@ -98,17 +98,17 @@ jobs:
                 fi
               done
               if [ "$matched" -eq 0 ]; then
-                problems+=("Signed-off-by 邮箱需与作者（${author_email}）或提交者（${committer_email}）一致")
+                problems+=("Signed-off-by email must match the author (${author_email}) or committer (${committer_email})")
               fi
               for email in "${sob_emails[@]}"; do
                 case "$email" in
-                  *noreply*) problems+=("Signed-off-by 使用了隐私邮箱 <${email}>，请换成真实邮箱") ;;
+                  *noreply*) problems+=("Signed-off-by uses a privacy email <${email}>, please use a real email") ;;
                 esac
               done
             fi
 
             case "$author_email" in
-              *noreply*) problems+=("作者邮箱是隐私邮箱 <${author_email}>，请配置真实邮箱后重新提交") ;;
+              *noreply*) problems+=("Author email is a privacy email <${author_email}>, please configure a real email and re-commit") ;;
             esac
 
             if [ "${#problems[@]}" -eq 0 ]; then
@@ -124,27 +124,27 @@ jobs:
           done
 
           {
-            echo "## DCO 检查"
+            echo "## DCO Check"
             echo
             if [ "$fail" -eq 0 ]; then
-              echo "全部 ${#commits[@]} 个提交（${scope}）签名有效。"
+              echo "All ${#commits[@]} commits (${scope}) are properly signed off."
             else
-              echo "存在未通过检查的提交（${scope}）："
+              echo "Commits that failed the check (${scope}):"
               echo
-              echo "| 提交 | 标题 | 问题 |"
+              echo "| Commit | Subject | Issue |"
               echo "| --- | --- | --- |"
               printf '%s\n' "${report[@]}"
               echo
-              echo "修复方式："
+              echo "How to fix:"
               echo
-              echo '1. 配置真实邮箱（不要用隐私邮箱）：'
+              echo '1. Configure a real email (do not use a privacy email):'
               echo '   ```bash'
               echo '   git config user.email "you@example.com"'
               echo '   ```'
-              echo '2. 重新签名为提交添加尾注：'
+              echo '2. Re-sign to add the trailer to your commits:'
               echo '   ```bash'
-              echo '   git commit --amend -s --no-edit          # 最新提交'
-              echo '   git rebase --exec "git commit --amend -s --no-edit" <base>  # 多个提交'
+              echo '   git commit --amend -s --no-edit          # latest commit'
+              echo '   git rebase --exec "git commit --amend -s --no-edit" <base>  # multiple commits'
               echo '   git push --force-with-lease'
               echo '   ```'
             fi
