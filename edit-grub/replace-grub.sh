@@ -4,9 +4,9 @@
 # App-Maintainer: Oliver Lin <oliver@liuxiaozhen.dev>
 # SPDX-License-Identifier: AGPL-3.0-only
 
-# 用法：
-#   sudo ./replace-grub.sh                 # 自动定位本机 /boot/grub/grub.cfg
-#   sudo ./replace-grub.sh <目标grub.cfg>   # 指定目标（如解包后的 ISO 树）
+# Usage:
+#   sudo ./replace-grub.sh                  # auto-detect /boot/grub/grub.cfg on this machine
+#   sudo ./replace-grub.sh <target grub.cfg> # specify target (e.g. an unpacked ISO tree)
 
 set -e
 
@@ -14,7 +14,7 @@ set -e
 cd "$(dirname "$0")" || exit 1
 
 if [ ! -f grub.cfg ]; then
-    echo "grub.cfg 404 exit" >&2
+    echo "grub.cfg not found, exiting" >&2
     exit 1
 fi
 
@@ -24,11 +24,11 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-# 目标：优先使用参数，否则自动探测本机 grub.cfg
+# Target: prefer the argument, otherwise auto-detect the local grub.cfg
 if [ -n "${1:-}" ]; then
     target=$1
     if [ ! -f "$target" ]; then
-        echo "目标不存在：$target" >&2
+        echo "Target not found: $target" >&2
         exit 1
     fi
 elif [ -f /boot/grub/grub.cfg ]; then
@@ -36,16 +36,16 @@ elif [ -f /boot/grub/grub.cfg ]; then
 elif [ -f /boot/grub2/grub.cfg ]; then
     target=/boot/grub2/grub.cfg
 else
-    echo "/boot/grub/grub.cfg 404 exit" >&2
+    echo "/boot/grub/grub.cfg not found, exiting" >&2
     exit 1
 fi
 
-# 备份原文件，便于出错回滚
+# Back up the original file for rollback on error
 backup="${target}.bak.$(date +%Y%m%d%H%M%S)"
 cp -a "$target" "$backup" || { echo "backup fail error!" >&2; exit 1; }
 
 cp -f grub.cfg "$target" || { echo "copy fail error!" >&2; exit 1; }
 sync
 
-echo "已备份：$backup"
-echo "✅Done! Replace grub.cfg OK! -> $target"
+echo "Backed up to: $backup"
+echo "Done! Replace grub.cfg OK! -> $target"

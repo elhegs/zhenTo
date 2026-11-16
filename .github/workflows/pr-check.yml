@@ -1,7 +1,7 @@
 name: PR Check
 
-# 合并前门禁：只做静态检查，不构建 ISO，几十秒出结果。
-# 在仓库分支保护里把 lint / secrets 设为必需检查即可拦住问题提交。
+# Pre-merge gate: static checks only, no ISO build, finishes in tens of seconds.
+# Mark lint / secrets as required checks in branch protection to block bad PRs.
 
 on:
   pull_request:
@@ -22,12 +22,12 @@ jobs:
   lint:
     runs-on: ubuntu-24.04
     steps:
-      - name: 检出代码
+      - name: Checkout code
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
 
-      - name: 安装 linter
+      - name: Install linters
         run: |
           set -e
           sudo apt-get update
@@ -39,7 +39,7 @@ jobs:
             "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/shfmt_${SHFMT_VERSION}_linux_amd64"
           sudo install -m 0755 /tmp/shfmt /usr/local/bin/shfmt
 
-      - name: 语法检查
+      - name: Syntax check
         run: |
           set -e
           while IFS= read -r f; do
@@ -56,14 +56,14 @@ jobs:
           [ "${#files[@]}" -gt 0 ] || exit 0
           shellcheck --severity=warning --external-sources "${files[@]}"
 
-      - name: shfmt（仅本次改动）
+      - name: shfmt (changed files only)
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -e
           mapfile -t files < <(git diff --name-only --diff-filter=ACMR "${BASE_SHA}...HEAD" -- '*.sh')
           if [ "${#files[@]}" -eq 0 ]; then
-            echo "本次 PR 未改动 shell 脚本"
+            echo "No shell scripts changed in this PR"
             exit 0
           fi
           shfmt -d -i 4 "${files[@]}"
@@ -74,7 +74,7 @@ jobs:
   secrets:
     runs-on: ubuntu-24.04
     steps:
-      - name: 检出代码
+      - name: Checkout code
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: gitleaks

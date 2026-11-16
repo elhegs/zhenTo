@@ -3,24 +3,25 @@
 # Author: Oliver Lin <oliver@liuxiaozhen.dev>
 # SPDX-License-Identifier: AGPL-3.0-only
 #
-# ZhenTo ISO 构建脚本（UEFI-only，不再依赖 Cubic）
+# ZhenTo ISO build script (UEFI-only, no longer depends on Cubic)
 #
-#   sudo ./build.sh              解包官方 ISO -> chroot 装 APP -> 重打包 -> 直出 ISO
-#   sudo ./build.sh --apps-only  只执行 install-app/*.sh（chroot 内部或真实系统使用）
+#   sudo ./build.sh              Unpack official ISO -> install APPs in chroot -> repack -> output ISO
+#   sudo ./build.sh --apps-only  Run install-app/*.sh only (inside chroot or on a real system)
 #
-# 可用环境变量覆盖：
-#   BASE_ISO      基础 ISO（默认 /home/oliver/iso/ubuntu-26.04.1-desktop-amd64.iso）
-#   VERSION       版本号（默认 0.1.0）
-#   VOLID         光盘卷标（默认 "ZhenTo <VERSION> amd64"）
-#   WORK_DIR      中间产物目录（默认 <repo>/work，需约 35G 可用空间）
-#   OUT_DIR       产物目录（默认 <repo>/out）
-#   PATCH_LAYERS  auto 或空格分隔的 casper 层文件名
-#   KEEP_WORK     1 保留中间产物，便于排查
-#   SQUASHFS_COMP 重打包压缩算法（默认沿用原层，如 xz；改用 zstd 会快很多）
-#   SQUASHFS_BLOCK 重打包块大小（默认沿用原层，通常 131072）
+# Overridable environment variables:
+#   BASE_ISO       Base ISO (default /home/oliver/iso/ubuntu-26.04.1-desktop-amd64.iso)
+#   VERSION        Version string (default 0.1.0)
+#   VOLID          Disc volume label (default "ZhenTo <VERSION> amd64")
+#   WORK_DIR       Intermediate build directory (default <repo>/work, needs ~35G free)
+#   OUT_DIR        Output directory (default <repo>/out)
+#   PATCH_LAYERS   auto or space-separated casper layer file names
+#   KEEP_WORK      1 to keep intermediate files for debugging
+#   SQUASHFS_COMP  Squashfs compression algorithm (default inherited from original layer, e.g. xz; zstd is much faster)
+#   SQUASHFS_BLOCK Squashfs block size (default inherited from original layer, usually 131072)
 #
-# 说明：Ubuntu 26.04 桌面盘使用分层 squashfs（casper/install-sources.yaml 描述）。
-# 默认只改「默认安装源」的基底层，语言层和 enhanced-secureboot 覆盖层保持原样。
+# Note: Ubuntu 26.04 desktop ISO uses layered squashfs (described in casper/install-sources.yaml).
+# By default only the base layer of the "default install source" is modified; the language layer
+# and enhanced-secureboot overlay layer are left untouched.
 
 set -euo pipefail
 
@@ -52,14 +53,15 @@ human() {
     awk -v b="$1" 'BEGIN { printf "%.1fG", b / 1024 / 1024 / 1024 }'
 }
 
-# ISO 9660 卷标（-V）最多 32 个字符，超出会直接让 xorriso 失败，这里统一截断
+# ISO 9660 volume label (-V) is limited to 32 characters; exceeding it makes xorriso fail.
+# Truncate it here to keep things consistent.
 if [ "${#VOLID}" -gt 32 ]; then
-    warn "卷标超过 32 字符（${#VOLID}），截断为：${VOLID:0:32}"
+    warn "Volume label exceeds 32 chars (${#VOLID}); truncating to: ${VOLID:0:32}"
     VOLID=${VOLID:0:32}
 fi
 
 # ---------------------------------------------------------------------------
-# 预装 APP：在真实系统或 chroot 内执行 install-app/ 下的脚本
+# Preinstall APPs: run scripts under install-app/ on a real system or inside chroot
 # ---------------------------------------------------------------------------
 install_apps() {
     local app
@@ -75,7 +77,7 @@ install_apps() {
         sh "$app"
     done
 
-    [ "$found" -eq 1 ] || echo "==> install-app/ 下没有脚本"
+    [ "$found" -eq 1 ] || echo "==> No scripts under install-app/"
     echo "==> All applications installed."
 }
 
@@ -85,7 +87,7 @@ if [ "${1:-}" = "--apps-only" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 清理：卸载挂载点、恢复 resolv.conf
+# Cleanup: unmount bind mounts, restore resolv.conf
 # ---------------------------------------------------------------------------
 cleanup() {
     local m
@@ -107,7 +109,7 @@ cleanup() {
 trap cleanup EXIT
 
 # ---------------------------------------------------------------------------
-# 读取 install-sources.yaml 中默认安装源的基底层
+# Read the base layer of the default install source from install-sources.yaml
 # ---------------------------------------------------------------------------
 detect_default_layer() {
     awk '
@@ -118,7 +120,7 @@ detect_default_layer() {
 }
 
 # ---------------------------------------------------------------------------
-# 往 chroot 里注入构建期使用的辅助命令（不会被带进最终镜像）
+# Inject build-time helper commands into the chroot (they are not shipped in the final image)
 # ---------------------------------------------------------------------------
 write_chroot_helpers() {
     local bin="$ROOT_DIR/opt/zhento-build/bin"
@@ -126,7 +128,7 @@ write_chroot_helpers() {
 
     cat > "$bin/zhento-flatpak" <<'EOS'
 #!/bin/sh
-# 构建期预装 flatpak 应用：zhento-flatpak <app-id> [...]
+# Build-time flatpak preinstall: zhento-flatpak <app-id> [...]
 set -e
 export DEBIAN_FRONTEND=noninteractive
 
@@ -138,7 +140,7 @@ command -v flatpak >/dev/null 2>&1 || {
 flatpak remote-add --system --if-not-exists flathub \
     https://dl.flathub.org/repo/flathub.flatpakrepo
 
-[ "$#" -gt 0 ] || { echo "用法: zhento-flatpak <app-id>..." >&2; exit 2; }
+[ "$#" -gt 0 ] || { echo "Usage: zhento-flatpak <app-id>..." >&2; exit 2; }
 
 for id in "$@"; do
     flatpak install --system -y --noninteractive flathub "$id"
@@ -147,8 +149,9 @@ EOS
 
     cat > "$bin/zhento-snap" <<'EOS'
 #!/bin/sh
-# 构建期预置 snap：chroot 内没有运行 snapd，因此写 seed 而不是 snap install。
-# 注意：只在镜像自带 seed.yaml 时可用，否则会报错退出。
+# Build-time snap preinstall: snapd is not running inside chroot, so we write the seed
+# instead of running "snap install".
+# Note: only works when the image ships its own seed.yaml; otherwise it errors out.
 set -e
 export DEBIAN_FRONTEND=noninteractive
 
@@ -161,11 +164,11 @@ SEED=/var/lib/snapd/seed
 CHANNEL=${SNAP_CHANNEL:-stable}
 
 [ -f "$SEED/seed.yaml" ] || {
-    echo "XX  镜像内没有 $SEED/seed.yaml，无法预置 snap；请改用 apt 或 flatpak" >&2
+    echo "XX  No $SEED/seed.yaml in the image; cannot preinstall snap; use apt or flatpak instead" >&2
     exit 1
 }
 
-[ "$#" -gt 0 ] || { echo "用法: zhento-snap <snap-name>..." >&2; exit 2; }
+[ "$#" -gt 0 ] || { echo "Usage: zhento-snap <snap-name>..." >&2; exit 2; }
 
 for name in "$@"; do
     tmp=$(mktemp -d)
@@ -201,39 +204,39 @@ EOS
 }
 
 # ---------------------------------------------------------------------------
-# 品牌信息：把 edit-os-release/ 注入 chroot 并执行，改写镜像的 os-release
+# Branding: copy edit-os-release/ into the chroot and run it to rewrite the image's os-release
 # ---------------------------------------------------------------------------
 apply_os_release() {
     local src="$SELF_DIR/edit-os-release"
     local dst=/opt/zhento-build/edit-os-release
 
-    [ -d "$src" ] || { warn "缺少 edit-os-release/，跳过 os-release"; return 0; }
+    [ -d "$src" ] || { warn "edit-os-release/ is missing, skipping os-release"; return 0; }
 
-    log "写入 os-release"
+    log "Writing os-release"
     rm -rf "$ROOT_DIR$dst"
     cp -a "$src" "$ROOT_DIR$dst"
-    chroot "$ROOT_DIR" /bin/sh "$dst/edit.sh" || die "写入 os-release 失败"
+    chroot "$ROOT_DIR" /bin/sh "$dst/edit.sh" || die "Failed to write os-release"
 }
 
 # ---------------------------------------------------------------------------
-# 启动菜单：用 edit-grub/ 里的配置替换 ISO 树的 boot/grub/grub.cfg
+# Boot menu: replace boot/grub/grub.cfg in the ISO tree with the config from edit-grub/
 # ---------------------------------------------------------------------------
 apply_grub() {
     local src="$SELF_DIR/edit-grub"
     local dst="$ISO_DIR/boot/grub/grub.cfg"
 
-    [ -f "$src/grub.cfg" ] || { warn "缺少 edit-grub/grub.cfg，跳过启动菜单"; return 0; }
-    [ -f "$dst" ] || { warn "ISO 树里没有 boot/grub/grub.cfg，跳过启动菜单"; return 0; }
+    [ -f "$src/grub.cfg" ] || { warn "edit-grub/grub.cfg is missing, skipping boot menu"; return 0; }
+    [ -f "$dst" ] || { warn "boot/grub/grub.cfg not found in ISO tree, skipping boot menu"; return 0; }
 
-    log "替换启动菜单 grub.cfg"
-    sh "$src/replace-grub.sh" "$dst" || die "替换 grub.cfg 失败"
+    log "Replacing boot menu grub.cfg"
+    sh "$src/replace-grub.sh" "$dst" || die "Failed to replace grub.cfg"
 
-    # 备份文件是给真实系统回滚用的，不能被打进 ISO
+    # The backup file is for rollback on a real system; it must not be included in the ISO
     rm -f "$dst".bak.*
 }
 
 # ---------------------------------------------------------------------------
-# 处理单个 casper 层：解包 -> chroot 装 APP -> 重打包 -> 更新元数据
+# Process a single casper layer: unpack -> install APPs in chroot -> repack -> update metadata
 # ---------------------------------------------------------------------------
 patch_layer() {
     local layer="$1"
@@ -242,29 +245,29 @@ patch_layer() {
     local comp block old_size new_size avail need
     local -a env_args
 
-    [ -f "$sfs" ] || die "找不到层文件：$sfs"
+    [ -f "$sfs" ] || die "Layer file not found: $sfs"
 
     comp=$(unsquashfs -s "$sfs" | awk '/^Compression /{print $2}')
     block=$(unsquashfs -s "$sfs" | awk '/^Block size /{print $3}')
-    [ -n "$comp" ] && [ -n "$block" ] || die "无法读取 squashfs 参数：$sfs"
+    [ -n "$comp" ] && [ -n "$block" ] || die "Cannot read squashfs parameters: $sfs"
     comp=${SQUASHFS_COMP:-$comp}
     block=${SQUASHFS_BLOCK:-$block}
 
-    # 空间检查：解包体积 + 新层（基础 ISO 已在磁盘上，不重复计入）
+    # Space check: unpacked size + new layer (base ISO is already on disk, not counted twice)
     need=$(( $(stat -c%s "$sfs") * 3 / 2 ))
     if [ -f "$size_file" ]; then
         need=$(( need + $(tr -d '\n' < "$size_file") ))
     fi
     avail=$(df -Pk "$WORK_DIR" | awk 'NR==2{print $4 * 1024}')
     if [ "$avail" -lt "$need" ]; then
-        die "空间不足：$WORK_DIR 需要约 $(human "$need")，当前可用 $(human "$avail")。请把 WORK_DIR 指到大容量磁盘"
+        die "Not enough space: $WORK_DIR needs about $(human "$need"), available $(human "$avail"). Point WORK_DIR to a larger disk"
     fi
 
-    log "解包 $layer（$comp / ${block} 块）"
+    log "Unpacking $layer ($comp / ${block} block)"
     rm -rf "$ROOT_DIR"
     unsquashfs -no-progress -d "$ROOT_DIR" "$sfs" > /dev/null
 
-    log "准备 chroot"
+    log "Preparing chroot"
     install -d "$ROOT_DIR/opt/zhento-build" "$ROOT_DIR/dev" "$ROOT_DIR/dev/pts" \
         "$ROOT_DIR/proc" "$ROOT_DIR/sys" "$ROOT_DIR/run"
     cp -f "$SELF" "$ROOT_DIR/opt/zhento-build/build.sh"
@@ -278,25 +281,27 @@ patch_layer() {
     mount --bind /sys "$ROOT_DIR/sys"
     mount -t tmpfs tmpfs "$ROOT_DIR/run"
 
-    # 镜像自带 file:/cdrom 的 apt 源（离线安装仓库），chroot 里没有 /cdrom 会让
-    # apt update 直接失败；把 ISO 树挂进去，既修好索引又能用上离线仓库
+    # The image ships a file:/cdrom apt source (offline install repo); without /cdrom in
+    # the chroot, "apt update" fails outright. Bind-mount the ISO tree to fix the index and
+    # also make the offline repo available.
     if [ -d "$ISO_DIR/dists" ]; then
         install -d "$ROOT_DIR/cdrom"
         mount --bind "$ISO_DIR" "$ROOT_DIR/cdrom"
     fi
 
-    # chroot 内的 resolv.conf 通常是 systemd-resolved 的软链，先换成真实文件
+    # resolv.conf inside the chroot is usually a systemd-resolved symlink; replace it with
+    # a real file first.
     if [ -L "$ROOT_DIR/etc/resolv.conf" ]; then
         RESOLV_RESTORE=$(readlink "$ROOT_DIR/etc/resolv.conf")
         rm -f "$ROOT_DIR/etc/resolv.conf"
     fi
     cp -f /etc/resolv.conf "$ROOT_DIR/etc/resolv.conf"
 
-    # 防止 postinst 在 chroot 里启动服务
+    # Prevent postinst from starting services inside the chroot
     printf '#!/bin/sh\nexit 101\n' > "$ROOT_DIR/usr/sbin/policy-rc.d"
     chmod 0755 "$ROOT_DIR/usr/sbin/policy-rc.d"
 
-    log "在 chroot 内执行 build.sh --apps-only"
+    log "Running build.sh --apps-only inside chroot"
     env_args=(
         HOME=/root
         TERM=dumb
@@ -313,19 +318,19 @@ patch_layer() {
 
     apply_os_release
 
-    log "清理构建期痕迹"
+    log "Cleaning up build-time artifacts"
     rm -rf "$ROOT_DIR/opt/zhento-build"
     rm -f "$ROOT_DIR/usr/sbin/policy-rc.d"
     rm -f "$ROOT_DIR"/var/cache/apt/archives/*.deb 2>/dev/null || true
 
     cleanup
 
-    log "重打包 $layer"
+    log "Repacking $layer"
     mksquashfs "$ROOT_DIR" "$WORK_DIR/$layer" \
         -comp "$comp" -b "$block" -noappend -no-progress -quiet
     mv -f "$WORK_DIR/$layer" "$sfs"
 
-    # 更新层体积（casper 用它计算 overlay 需要的内存）
+    # Update the layer size (casper uses it to compute the memory needed by the overlay)
     if [ -f "$size_file" ]; then
         old_size=$(tr -d '\n' < "$size_file")
         new_size=$(du -sb "$ROOT_DIR" | cut -f1)
@@ -338,53 +343,54 @@ patch_layer() {
 }
 
 # ---------------------------------------------------------------------------
-# 主流程
+# Main flow
 # ---------------------------------------------------------------------------
 main() {
     local layer start end interval report need avail
     local -a layer_list
 
-    [ "$(id -u)" -eq 0 ] || die "需要 root 权限（chroot / mount）：sudo $0"
+    [ "$(id -u)" -eq 0 ] || die "root is required (chroot / mount): sudo $0"
     for c in xorriso unsquashfs mksquashfs rsync dd awk; do
-        command -v "$c" > /dev/null || die "缺少命令：$c"
+        command -v "$c" > /dev/null || die "Missing command: $c"
     done
-    [ -f "$BASE_ISO" ] || die "找不到基础 ISO：$BASE_ISO"
+    [ -f "$BASE_ISO" ] || die "Base ISO not found: $BASE_ISO"
 
     mkdir -p "$OUT_DIR"
     rm -rf "$WORK_DIR"
     mkdir -p "$ISO_DIR"
 
-    log "解包 ISO 树到 $ISO_DIR"
+    log "Extracting ISO tree to $ISO_DIR"
     xorriso -osirrox on:auto_chmod_on -indev "$BASE_ISO" -extract / "$ISO_DIR" > /dev/null
 
     [ -f "$ISO_DIR/casper/install-sources.yaml" ] || \
-        die "该 ISO 没有 casper/install-sources.yaml，不是受支持的 Ubuntu 桌面镜像"
+        die "This ISO has no casper/install-sources.yaml; it is not a supported Ubuntu desktop image"
 
-    # 取出 UEFI 启动用的 FAT 分区（原盘是“追加分区”，不是 efi.img 文件）
-    log "提取 EFI 启动分区"
+    # Extract the FAT partition used for UEFI boot (the original disc uses an "appended partition",
+    # not an efi.img file)
+    log "Extracting EFI boot partition"
     report=$(LC_ALL=C xorriso -indev "$BASE_ISO" -report_el_torito as_mkisofs 2>/dev/null)
     interval=$(printf '%s\n' "$report" \
         | sed -n "s/.*--interval:local_fs:\([0-9][0-9]*\)d-\([0-9][0-9]*\)d.*/\1 \2/p" \
         | head -n1)
-    [ -n "$interval" ] || die "无法从基础 ISO 解析 EFI 分区位置"
+    [ -n "$interval" ] || die "Cannot parse EFI partition location from base ISO"
     start=${interval% *}
     end=${interval#* }
     dd if="$BASE_ISO" of="$EFI_IMG" bs=512 skip="$start" \
         count=$((end - start + 1)) status=none
-    [ -s "$EFI_IMG" ] || die "EFI 分区提取失败"
+    [ -s "$EFI_IMG" ] || die "EFI partition extraction failed"
 
-    # 选择要改的层
+    # Choose which layers to patch
     if [ "$PATCH_LAYERS" = "auto" ]; then
         layer=$(detect_default_layer)
-        [ -n "$layer" ] || die "无法从 install-sources.yaml 确定默认安装源"
+        [ -n "$layer" ] || die "Cannot determine the default install source from install-sources.yaml"
         layer_list=("$layer")
     else
         read -r -a layer_list <<< "$PATCH_LAYERS"
     fi
 
-    log "待修改层：${layer_list[*]}"
-    warn "只处理上述基底层；语言层与 enhanced-secureboot 覆盖层保持官方原样"
-    warn "casper/*.manifest 未重新生成（仅影响安装器的包统计，不影响安装结果）"
+    log "Layers to modify: ${layer_list[*]}"
+    warn "Only the above base layer(s) are processed; language and enhanced-secureboot overlay layers are kept as-is"
+    warn "casper/*.manifest are not regenerated (only affects installer package stats, not the install result)"
 
     for layer in "${layer_list[@]}"; do
         patch_layer "$layer"
@@ -392,10 +398,11 @@ main() {
 
     apply_grub
 
-    # boot.catalog 由 xorriso 重新生成，删掉 ISO 树里的旧文件，避免 md5 记录过期内容
+    # boot.catalog is regenerated by xorriso; delete the old one in the ISO tree so md5sum
+    # does not record stale content.
     rm -f "$ISO_DIR/boot.catalog"
 
-    log "重建 md5sum.txt"
+    log "Rebuilding md5sum.txt"
     (
         cd "$ISO_DIR"
         find . -type f ! -name md5sum.txt -print0 \
@@ -406,9 +413,9 @@ main() {
     need=$(( $(du -sb "$ISO_DIR" | cut -f1) * 105 / 100 ))
     avail=$(df -Pk "$OUT_DIR" | awk 'NR==2{print $4 * 1024}')
     [ "$avail" -ge "$need" ] || \
-        die "输出目录空间不足：需要约 $(human "$need")，可用 $(human "$avail")"
+        die "Not enough space in output directory: need about $(human "$need"), available $(human "$avail")"
 
-    log "生成 UEFI-only ISO：$ISO_NAME"
+    log "Generating UEFI-only ISO: $ISO_NAME"
     rm -f "$OUT_DIR/$ISO_NAME"
     xorriso -as mkisofs \
         -r -V "$VOLID" -J -joliet-long -l -iso-level 3 \
@@ -425,14 +432,14 @@ main() {
         md5sum "$ISO_NAME" > "zhenTo-${VERSION}-amd64.md5"
     )
 
-    log "完成"
+    log "Done"
     printf '  ISO : %s (%s)\n' "$OUT_DIR/$ISO_NAME" "$(human "$(stat -c%s "$OUT_DIR/$ISO_NAME")")"
     printf '  MD5 : %s\n' "$OUT_DIR/zhenTo-${VERSION}-amd64.md5"
     xorriso -indev "$OUT_DIR/$ISO_NAME" -report_el_torito plain 2>/dev/null \
         | grep 'El Torito boot img' || true
 
     if [ "$KEEP_WORK" = "1" ]; then
-        log "保留中间产物：$WORK_DIR"
+        log "Keeping intermediate files: $WORK_DIR"
     else
         rm -rf "$WORK_DIR"
     fi

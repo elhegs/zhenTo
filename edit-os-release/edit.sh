@@ -14,7 +14,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 if [ ! -e /etc/os-release ]; then
-    echo "/etc/os-release 404 exit" >&2
+    echo "/etc/os-release not found, exiting" >&2
     exit 1
 fi
 
@@ -27,4 +27,4 @@ fi
 
 cp -f os-release "$target" || { echo "copy fail error!" >&2; exit 1; }
 
-echo "✅Done! Edit os-release OK!"
+echo "Done! Edit os-release OK!"

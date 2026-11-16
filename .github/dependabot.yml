@@ -1,7 +1,7 @@
 version: 2
 
 updates:
-  # 自动跟进 workflow 里固定到 commit SHA 的 action 版本
+  # Automatically follow action versions pinned to commit SHAs in workflows
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
