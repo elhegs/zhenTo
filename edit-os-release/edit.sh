@@ -18,9 +18,9 @@ if [ ! -f /etc/os-release ]; then
 fi
 
 if [ -L "/etc/os-release" ]; then
-    copy_usr()
+    copy_usr
 else
-    copy_etc()
+    copy_etc
 fi
 
 echo "✅Done! Edit os-release OK!"
