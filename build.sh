@@ -195,6 +195,21 @@ EOS
 }
 
 # ---------------------------------------------------------------------------
+# 品牌信息：把 edit-os-release/ 注入 chroot 并执行，改写镜像的 os-release
+# ---------------------------------------------------------------------------
+apply_os_release() {
+    local src="$SELF_DIR/edit-os-release"
+    local dst=/opt/zhento-build/edit-os-release
+
+    [ -d "$src" ] || { warn "缺少 edit-os-release/，跳过 os-release"; return 0; }
+
+    log "写入 os-release"
+    rm -rf "$ROOT_DIR$dst"
+    cp -a "$src" "$ROOT_DIR$dst"
+    chroot "$ROOT_DIR" /bin/sh "$dst/edit.sh" || die "写入 os-release 失败"
+}
+
+# ---------------------------------------------------------------------------
 # 处理单个 casper 层：解包 -> chroot 装 APP -> 重打包 -> 更新元数据
 # ---------------------------------------------------------------------------
 patch_layer() {
@@ -272,6 +287,8 @@ patch_layer() {
     done
     chroot "$ROOT_DIR" /usr/bin/env -i "${env_args[@]}" \
         /bin/bash /opt/zhento-build/build.sh --apps-only
+
+    apply_os_release
 
     log "清理构建期痕迹"
     rm -rf "$ROOT_DIR/opt/zhento-build"
