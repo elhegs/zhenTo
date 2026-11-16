@@ -4,29 +4,27 @@
 # App-Maintainer: Oliver Lin <oliver@liuxiaozhen.dev>
 # SPDX-License-Identifier: AGPL-3.0-only
 
+# switch to script dir, so the relative os-release path always works
+cd "$(dirname "$0")" || exit 1
+
 # check users
-if [ "$EUID" -ne 0 ]; then
-    echo "No root! exit!"
+if [ "$(id -u)" -ne 0 ]; then
+    echo "No root! exit!" >&2
     exit 1
 fi
 
-copy_usr(){
-    cp -f os-release /usr/lib/os-release || { echo "copy fail error!" >&2; exit 1; }
-}
-
-copy_etc(){
-    cp -f os-release /etc/os-release || { echo "copy fail error!" >&2; exit 1; }
-}
-
-if [ ! -f /etc/os-release ]; then
+if [ ! -e /etc/os-release ]; then
     echo "/etc/os-release 404 exit" >&2
     exit 1
 fi
 
-if [ -L "/etc/os-release" ]; then
-    copy_usr
+# follow the symlink: write to the real file /etc/os-release points to
+if [ -L /etc/os-release ]; then
+    target=$(readlink -f /etc/os-release) || { echo "readlink fail error!" >&2; exit 1; }
 else
-    copy_etc
+    target=/etc/os-release
 fi
+
+cp -f os-release "$target" || { echo "copy fail error!" >&2; exit 1; }
 
 echo "✅Done! Edit os-release OK!"
