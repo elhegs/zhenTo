@@ -210,6 +210,23 @@ apply_os_release() {
 }
 
 # ---------------------------------------------------------------------------
+# 启动菜单：用 edit-grub/ 里的配置替换 ISO 树的 boot/grub/grub.cfg
+# ---------------------------------------------------------------------------
+apply_grub() {
+    local src="$SELF_DIR/edit-grub"
+    local dst="$ISO_DIR/boot/grub/grub.cfg"
+
+    [ -f "$src/grub.cfg" ] || { warn "缺少 edit-grub/grub.cfg，跳过启动菜单"; return 0; }
+    [ -f "$dst" ] || { warn "ISO 树里没有 boot/grub/grub.cfg，跳过启动菜单"; return 0; }
+
+    log "替换启动菜单 grub.cfg"
+    sh "$src/replace-grub.sh" "$dst" || die "替换 grub.cfg 失败"
+
+    # 备份文件是给真实系统回滚用的，不能被打进 ISO
+    rm -f "$dst".bak.*
+}
+
+# ---------------------------------------------------------------------------
 # 处理单个 casper 层：解包 -> chroot 装 APP -> 重打包 -> 更新元数据
 # ---------------------------------------------------------------------------
 patch_layer() {
@@ -366,6 +383,8 @@ main() {
     for layer in "${layer_list[@]}"; do
         patch_layer "$layer"
     done
+
+    apply_grub
 
     # boot.catalog 由 xorriso 重新生成，删掉 ISO 树里的旧文件，避免 md5 记录过期内容
     rm -f "$ISO_DIR/boot.catalog"
