@@ -62,6 +62,44 @@ if [ "${#VOLID}" -gt 32 ]; then
     warn "Volume label exceeds 32 chars (${#VOLID}); truncating to: ${VOLID:0:32}"
     VOLID=${VOLID:0:32}
 fi
+# ---------------------------------------------------------------------------
+# install PPA repositories
+# ---------------------------------------------------------------------------
+install_ppa_repositories() {
+    local ppa_list="$SELF_DIR/install-app/ppa.list"
+    local ppa
+
+    [ -f "$ppa_list" ] || {
+        warn "ppa.list not found: $ppa_list, skipping PPA setup"
+        return 0
+    }
+
+    # add-apt-repository comes from software-properties-common
+    if ! command -v add-apt-repository >/dev/null 2>&1; then
+        log "Installing software-properties-common"
+        apt-get update
+        apt-get install -y --no-install-recommends software-properties-common ||
+            die "Failed to install software-properties-common"
+    fi
+
+    log "Adding PPA repositories from $ppa_list"
+    while IFS= read -r ppa || [ -n "$ppa" ]; do
+        # Trim whitespace; skip empty lines and comments
+        ppa=$(printf '%s\n' "$ppa" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        [ -z "$ppa" ] && continue
+        case "$ppa" in \#*) continue ;; esac
+
+        log "Adding $ppa"
+        add-apt-repository -y "$ppa" || die "Failed to add PPA: $ppa"
+    done <"$ppa_list"
+}
+
+install_ppa_repositories()
+
+# ---------------------------------------------------------------------------
+# update apt-get
+# ---------------------------------------------------------------------------
+apt-get update
 
 # ---------------------------------------------------------------------------
 # Preinstall APPs: run scripts under install-app/ on a real system or inside chroot
