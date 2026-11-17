@@ -9,5 +9,4 @@
 set -e
 
 add-apt-repository -y ppa:zitzhen/patchsplit
-apt update
 apt install -y patchsplit
