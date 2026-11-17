@@ -22,12 +22,15 @@ fail() {
 }
 ok() { printf 'ok - %s\n' "$*"; }
 
-# Stubs. Only `id -u` is intercepted; other id arguments are not used here.
+# Stubs. `id -u` is intercepted separately below; other id arguments are not used.
+# Build tools are stubbed too: PR runners do not install xorriso/squashfs-tools,
+# and --check only needs `command -v` to find them (it must not execute them).
 cat >"$MOCK_BIN/id" <<'EOF'
 #!/bin/sh
 echo 0
 EOF
-for cmd in apt-get add-apt-repository curl snap gh; do
+for cmd in apt-get add-apt-repository curl snap gh \
+    xorriso unsquashfs mksquashfs rsync dd; do
     cat >"$MOCK_BIN/$cmd" <<EOF
 #!/bin/sh
 echo "$cmd \$*" >> "$MOCK_LOG"
@@ -55,6 +58,8 @@ echo "Filesystem 1024-blocks Used Available Capacity Mounted"
 echo "mock 100000000 1 100000000 1% /mock"
 EOF
 chmod +x "$MOCK_BIN"/*
+[ "$(PATH="$MOCK_BIN:$PATH" command -v xorriso)" = "$MOCK_BIN/xorriso" ] ||
+    fail "build tool stubs are not shadowing PATH"
 
 # 1. Missing tag must fail fast, before any gh call.
 set +e
