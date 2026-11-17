@@ -94,7 +94,7 @@ install_ppa_repositories() {
     done <"$ppa_list"
 }
 
-install_ppa_repositories()
+install_ppa_repositories
 
 # ---------------------------------------------------------------------------
 # update apt-get
