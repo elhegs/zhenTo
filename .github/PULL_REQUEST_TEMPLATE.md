@@ -1,3 +1,8 @@
+<!--
+默认模板（自动填充）。英文版位于 .github/PULL_REQUEST_TEMPLATE/english.md。
+若要用英文版新建 PR，请在 compare URL 后加参数：?quick_pull=1&template=english.md
+-->
+
 ## 变更类型
 
 <!--
