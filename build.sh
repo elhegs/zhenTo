@@ -7,6 +7,7 @@
 #
 #   sudo ./build.sh              Unpack official ISO -> install APPs in chroot -> repack -> output ISO
 #   sudo ./build.sh --apps-only  Run install-app/*.sh only (inside chroot or on a real system)
+#   sudo ./build.sh --check      Read-only preflight; exits before any apt/PPA changes
 #
 # Overridable environment variables:
 #   BASE_ISO       Base ISO (default /home/oliver/iso/ubuntu-26.04.1-desktop-amd64.iso)
@@ -29,7 +30,7 @@ SELF_DIR=$(cd "$(dirname "$0")" && pwd)
 SELF="$SELF_DIR/$(basename "$0")"
 
 BASE_ISO=${BASE_ISO:-/home/oliver/iso/ubuntu-26.04.1-desktop-amd64.iso}
-VERSION=${VERSION:-0.1.0}
+VERSION=${VERSION:-0.1.1}
 VOLID=${VOLID:-"ZhenTo ${VERSION} amd64"}
 WORK_DIR=${WORK_DIR:-"$SELF_DIR/work"}
 OUT_DIR=${OUT_DIR:-"$SELF_DIR/out"}
@@ -62,6 +63,55 @@ if [ "${#VOLID}" -gt 32 ]; then
     warn "Volume label exceeds 32 chars (${#VOLID}); truncating to: ${VOLID:0:32}"
     VOLID=${VOLID:0:32}
 fi
+
+# ---------------------------------------------------------------------------
+# Read-only preflight: safe to run before any apt/PPA or filesystem changes.
+# ---------------------------------------------------------------------------
+preflight_checks() {
+    [ "$(id -u)" -eq 0 ] || die "root is required (chroot / mount): sudo $0 --check"
+    for c in xorriso unsquashfs mksquashfs rsync dd awk; do
+        command -v "$c" >/dev/null || die "Missing command: $c"
+    done
+    [ -f "$BASE_ISO" ] || die "Base ISO not found: $BASE_ISO"
+
+    local space_dir="."
+    if [ -d "$OUT_DIR" ]; then
+        space_dir="$OUT_DIR"
+    elif [ -d "$(dirname "$OUT_DIR")" ]; then
+        space_dir=$(dirname "$OUT_DIR")
+    elif [ -d "$(dirname "$WORK_DIR")" ]; then
+        space_dir=$(dirname "$WORK_DIR")
+    fi
+    [ -w "$space_dir" ] || die "Output directory is not writable: $space_dir"
+
+    local avail_gb
+    avail_gb=$(df -Pk "$space_dir" | awk 'NR==2{print int($4/1024/1024)}')
+    [ "$avail_gb" -ge 25 ] || die "Not enough disk space: ${avail_gb}G available (need >= 25G)"
+
+    local f
+    for f in "$SELF_DIR/edit-os-release/edit.sh" "$SELF_DIR/edit-grub/replace-grub.sh" "$SELF_DIR/install-app/ppa.list"; do
+        [ -f "$f" ] || die "Missing build input: $f"
+    done
+
+    if [ -f "$SELF_DIR/tests/check-version-consistency.sh" ]; then
+        bash "$SELF_DIR/tests/check-version-consistency.sh"
+    else
+        warn "Version consistency check not found; skipping"
+    fi
+
+    local image_version
+    image_version=$(sed -n 's/^VERSION_ID="\([^"]*\)"$/\1/p' "$SELF_DIR/edit-os-release/os-release")
+    [ "$image_version" = "$VERSION" ] ||
+        die "Requested VERSION=$VERSION but os-release VERSION_ID=$image_version; update branding first"
+
+    log "Preflight OK (root, commands, base ISO, space, build inputs, versions)"
+}
+
+if [ "${1:-}" = "--check" ]; then
+    preflight_checks
+    exit 0
+fi
+
 # ---------------------------------------------------------------------------
 # install PPA repositories
 # ---------------------------------------------------------------------------
@@ -94,12 +144,15 @@ install_ppa_repositories() {
     done <"$ppa_list"
 }
 
-install_ppa_repositories
-
 # ---------------------------------------------------------------------------
-# update apt-get
+# Prepare apt: used by the host build and by --apps-only inside the chroot.
+# Keeping this in one function preserves the target-system PPA behaviour.
 # ---------------------------------------------------------------------------
-apt-get update
+prepare_apt() {
+    install_ppa_repositories
+    log "Updating apt package index"
+    apt-get update
+}
 
 # ---------------------------------------------------------------------------
 # Preinstall APPs: run scripts under install-app/ on a real system or inside chroot
@@ -123,6 +176,7 @@ install_apps() {
 }
 
 if [ "${1:-}" = "--apps-only" ]; then
+    prepare_apt
     install_apps
     exit 0
 fi
@@ -404,6 +458,8 @@ main() {
         command -v "$c" >/dev/null || die "Missing command: $c"
     done
     [ -f "$BASE_ISO" ] || die "Base ISO not found: $BASE_ISO"
+
+    prepare_apt
 
     mkdir -p "$OUT_DIR"
     rm -rf "$WORK_DIR"
