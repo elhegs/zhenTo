@@ -48,8 +48,8 @@ ok "volume label: $actual_label"
 
 torito=$(LC_ALL=C xorriso -indev "$ISO" -report_el_torito as_mkisofs 2>/dev/null)
 case "$torito" in
-    *appended_partition_2*|*efi*|*EFI*) ;;
-    *) die "No UEFI/EFI boot entry found in El Torito report: $torito" ;;
+*appended_partition_2* | *efi* | *EFI*) ;;
+*) die "No UEFI/EFI boot entry found in El Torito report: $torito" ;;
 esac
 ok "UEFI boot catalog entry"
 

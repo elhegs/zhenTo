@@ -51,8 +51,8 @@ printf 'os-release VERSION         : %s\n' "$pretty_v"
 [ "$build_v" = "$wf_v" ] || fail "Version drift: build.sh=$build_v workflow=$wf_v"
 
 case "$pretty_v" in
-    *26.04*) ;;
-    *) fail "os-release VERSION must describe the 26.04 base ISO, got: $pretty_v" ;;
+*26.04*) ;;
+*) fail "os-release VERSION must describe the 26.04 base ISO, got: $pretty_v" ;;
 esac
 
 [ -n "$codename" ] && [ "$codename" = "$ubuntu_codename" ] ||
