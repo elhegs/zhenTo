@@ -49,6 +49,12 @@ jobs:
             esac
           done < <(git ls-files '*.sh')
 
+      - name: Unit tests (node:test)
+        run: node --test tests/*.test.js
+
+      - name: Version consistency
+        run: bash tests/check-version-consistency.sh
+
       - name: shellcheck
         run: |
           set -e
@@ -70,6 +76,15 @@ jobs:
 
       - name: actionlint
         run: actionlint -color
+
+  preflight:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Preflight smoke tests
+        run: bash tests/preflight.test.sh
 
   secrets:
     runs-on: ubuntu-24.04
