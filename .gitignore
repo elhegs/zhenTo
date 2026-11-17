@@ -3,4 +3,9 @@
 work/
 out/
 
+# Ignore all ISO files
 *.iso
+*.z02
+*.z01
+*.sha256
+SHA256SUMS
