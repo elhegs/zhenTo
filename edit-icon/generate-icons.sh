@@ -81,9 +81,9 @@ convert "$full" -resize 187x94 "$out/ubuntu-logo-text.png"
 cp -f "$out/ubuntu-logo-text.png" "$out/ubuntu-logo-text-dark.png"
 
 # -- SVG slots (valid SVG with embedded PNG, never raw PNG bytes) ------------
-svg_from_png "$out/ubuntu-logo.svg"            "$WORKTMP/embed-short.png"    32 32  '0 0 32 32'
-svg_from_png "$out/ubuntu-logo-text.svg"       "$out/ubuntu-logo-text.png"  187 94 '0 0 1774 887'
-svg_from_png "$out/ubuntu-logo-text-dark.svg"  "$out/ubuntu-logo-text.png"  187 94 '0 0 1774 887'
+svg_from_png "$out/ubuntu-logo.svg" "$WORKTMP/embed-short.png" 32 32 '0 0 32 32'
+svg_from_png "$out/ubuntu-logo-text.svg" "$out/ubuntu-logo-text.png" 187 94 '0 0 1774 887'
+svg_from_png "$out/ubuntu-logo-text-dark.svg" "$out/ubuntu-logo-text.png" 187 94 '0 0 1774 887'
 
 # -- verify formats ---------------------------------------------------------
 for f in "$out"/*; do
