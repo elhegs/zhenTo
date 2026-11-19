@@ -28,6 +28,7 @@ ZhenTo 是一款基於 **Ubuntu 26.04.1 LTS "Resolute Raccoon"** 客製化的 Li
   - [快速建置](#快速建置)
   - [建置模式](#建置模式)
   - [環境變數](#環境變數)
+  - [品牌素材](#品牌素材)
 - [使用 ISO](#使用-iso)
 - [下載發行版](#下載發行版)
 - [測試](#測試)
@@ -39,7 +40,7 @@ ZhenTo 是一款基於 **Ubuntu 26.04.1 LTS "Resolute Raccoon"** 客製化的 Li
 
 ## 特色
 
-- **品牌重塑** —— `/etc/os-release` 與 GRUB 開機選單皆標示為 ZhenTo。
+- **品牌重塑** —— `/etc/os-release`、GRUB 開機選單、`/usr/share/pixmaps/` 中的品牌圖示與 ZhenTo 桌布皆標示為 ZhenTo。
 - **僅 UEFI 映像** —— 附加單一 EFI 系統分割區至 ISO，並使用 `xorriso` 產生開機項目。
 - **預裝開發工具** —— `curl`、`git`、`zsh` 與 [patchsplit](https://github.com/zitzhen/patchsplit)（來自 `ppa:zitzhen/patchsplit` PPA）。
 - **ZhenTo 桌面安裝程式** —— 來自 [zhento-desktop-install](https://github.com/zitzhen/zhento-desktop-install) 的 `ubuntu-desktop-bootstrap` snap 已預置於映像中。在真實系統中直接安裝；在 `chroot` 內則透過一次性 systemd 服務於首次開機時完成安裝。
@@ -55,6 +56,11 @@ ZhenTo 是一款基於 **Ubuntu 26.04.1 LTS "Resolute Raccoon"** 客製化的 Li
 ├── edit-grub/
 │   ├── grub.cfg              # ZhenTo GRUB 選單
 │   └── replace-grub.sh       # 將選單寫入目標 grub.cfg（自動備份）
+├── edit-icon/
+│   ├── edit-icon.sh          # 將品牌圖示與桌布寫入解壓後的根目錄
+│   ├── generate-icons.sh     # 維護工具：從素材重新產生圖示（需 ImageMagick）
+│   ├── sources/              # 原始品牌 PNG（短圖示 + 完整橫幅）
+│   └── files/pixmaps/        # 預先產生的品牌圖示，已提交至 git
 ├── edit-os-release/
 │   ├── os-release            # ZhenTo /etc/os-release 品牌資訊
 │   └── edit.sh               # 將檔案寫入 /etc/os-release
@@ -112,8 +118,20 @@ sudo BASE_ISO=/path/to/ubuntu-26.04.1-desktop-amd64.iso ./build.sh
 | `KEEP_WORK` | `0` | 設為 `1` 以保留中間檔案供偵錯 |
 | `SQUASHFS_COMP` | 沿用原值 | Squashfs 壓縮演算法（`zstd` 比 `xz` 快得多） |
 | `SQUASHFS_BLOCK` | 沿用原值 | Squashfs 區塊大小（通常為 `131072`） |
+| `ICON_SRC_DIR` | `<repo>/edit-icon/sources` | 品牌圖示素材目錄（短圖示 + 完整橫幅 PNG） |
 
 若 `VERSION` 與 `edit-os-release/os-release` 中的版本不一致，建置腳本將拒絕執行，以確保品牌形象不會與版本號脫節。
+
+### 品牌素材
+
+品牌圖稿來自 [zitzhen/zhenTo-icon](https://github.com/zitzhen/zhenTo-icon)，已隨儲存庫存放於 `edit-icon/sources/`：
+
+| 檔案 | 來源 | SHA256 |
+|---|---|---|
+| `zhento-short.png` | `zhento短图标.png`（548×545） | `e6d3cbedf49f04319c0a5709d3469411d8a1357bb18f971e93d4bc9faa64513e` |
+| `zhento-full.png` | `zhento.png`（1774×887） | `2f2949680a77be8c1d050d4741a91fb9b5dd0834473ca8e6f1ba7095a398ff5d` |
+
+短圖示替換 `/usr/share/pixmaps/` 下的 7 個 `ubuntu-logo*` / `debian-logo*` 品牌位；完整橫幅做為 `/usr/share/backgrounds/zhento.png` 新增桌布。映像中的其他圖示保持不變。`edit-icon/files/pixmaps/` 中的 PNG/SVG 檔案是**預先產生並提交至 git** 的，因此建置時無需 ImageMagick、也無需網路。圖稿變更後執行 `./edit-icon/generate-icons.sh`（需 ImageMagick）重新產生並提交即可。由於沒有單獨的暗色素材，`-text-dark` 變體重用淺色圖稿。
 
 ## 使用 ISO
 

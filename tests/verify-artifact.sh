@@ -96,14 +96,32 @@ image_version=$(sed -n 's/^VERSION_ID="\([^"]*\)"$/\1/p' "$TMP/os-release")
     die "VERSION_ID in ISO is '$image_version', expected '$VERSION'"
 ok "in-image os-release matches repository and version $VERSION"
 
-# 7. Preinstalled tools and build-time residue. Use -cat as a cheap existence
-#    probe: it succeeds for regular files and fails (rc=2) when absent.
+# 7. Preinstalled tools, brand icons, wallpaper and build-time residue.
+#    Use -cat as a cheap existence probe: it succeeds for regular files and
+#    fails (rc=2) when absent.
 for f in usr/bin/curl usr/bin/git usr/bin/zsh usr/bin/patchsplit \
-    var/lib/snapd/seed/seed.yaml etc/systemd/system/zhento-install-snap.service; do
+    var/lib/snapd/seed/seed.yaml etc/systemd/system/zhento-install-snap.service \
+    usr/share/pixmaps/ubuntu-logo.svg \
+    usr/share/pixmaps/ubuntu-logo-text.svg \
+    usr/share/pixmaps/ubuntu-logo-text.png \
+    usr/share/pixmaps/ubuntu-logo-text-dark.svg \
+    usr/share/pixmaps/ubuntu-logo-text-dark.png \
+    usr/share/pixmaps/debian-logo.png \
+    usr/share/pixmaps/debian-logo.bmp \
+    usr/share/backgrounds/zhento.png; do
     unsquashfs -cat "$TMP/$layer" "/$f" >/dev/null 2>&1 ||
         die "Missing in image: /$f"
     ok "present in image: /$f"
 done
+
+# The wallpaper must be byte-identical to the shipped source image.
+unsquashfs -cat "$TMP/$layer" /usr/share/backgrounds/zhento.png 2>/dev/null |
+    sha256sum | awk '{print $1}' >"$TMP/wallpaper.sha256"
+expected_wallpaper=$(sha256sum "$REPO_DIR/edit-icon/sources/zhento-full.png" | awk '{print $1}')
+actual_wallpaper=$(cat "$TMP/wallpaper.sha256")
+[ "$actual_wallpaper" = "$expected_wallpaper" ] ||
+    die "Wallpaper sha256 mismatch: expected $expected_wallpaper, got $actual_wallpaper"
+ok "wallpaper matches edit-icon/sources/zhento-full.png"
 
 for leftover in opt/zhento-build/build.sh usr/sbin/policy-rc.d; do
     if unsquashfs -cat "$TMP/$layer" "/$leftover" >/dev/null 2>&1; then

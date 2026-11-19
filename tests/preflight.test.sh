@@ -162,6 +162,21 @@ case "$out" in *'update branding first'*) ;; *) fail "version mismatch diagnosti
 [ ! -s "$MOCK_LOG" ] || fail "apt/PPA was called on a version mismatch: $(cat "$MOCK_LOG")"
 ok "build.sh --check rejects a VERSION that disagrees with os-release"
 
+# 7b. Missing brand icon sources must fail preflight before any build work.
+: >"$MOCK_LOG"
+mkdir -p "$TMP/empty-icons"
+set +e
+out=$(PATH="$MOCK_BIN:$PATH" \
+    BASE_ISO="$TMP/fake.iso" ICON_SRC_DIR="$TMP/empty-icons" \
+    OUT_DIR="$TMP/out4" WORK_DIR="$TMP/work4" \
+    bash "$REPO_DIR/build.sh" --check 2>&1)
+rc=$?
+set -e
+[ "$rc" -eq 1 ] || fail "build.sh --check with empty ICON_SRC_DIR exited $rc, expected 1"
+case "$out" in *'Missing build input'*) ;; *) fail "missing icon input diagnostic missing: $out" ;; esac
+[ ! -s "$MOCK_LOG" ] || fail "apt/PPA was called on a missing-icon preflight: $(cat "$MOCK_LOG")"
+ok "build.sh --check fails fast when brand icon sources are missing"
+
 # 8. --apps-only still prepares apt/PPA before running install-app scripts.
 APP_ROOT="$TMP/apps-root"
 mkdir -p "$APP_ROOT/install-app"

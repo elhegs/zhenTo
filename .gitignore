@@ -3,6 +3,9 @@
 work/
 out/
 
+# Reference copy of upstream Ubuntu icons (not a build input)
+tmp/
+
 # Ignore all ISO files
 *.iso
 *.z03
