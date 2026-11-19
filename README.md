@@ -28,6 +28,7 @@ The whole image is assembled by shell scripts — the old dependency on Cubic ha
   - [Quick Build](#quick-build)
   - [Build Modes](#build-modes)
   - [Environment Variables](#environment-variables)
+  - [Brand Assets](#brand-assets)
 - [Using the ISO](#using-the-iso)
 - [Downloading a Release](#downloading-a-release)
 - [Testing](#testing)
@@ -39,7 +40,7 @@ The whole image is assembled by shell scripts — the old dependency on Cubic ha
 
 ## Features
 
-- **Rebranded identity** — `/etc/os-release` and the GRUB boot menu both identify the system as ZhenTo.
+- **Rebranded identity** — `/etc/os-release`, the GRUB boot menu, the brand icons in `/usr/share/pixmaps/`, and a ZhenTo wallpaper all identify the system as ZhenTo.
 - **UEFI-only image** — a single EFI system partition is appended to the ISO; boot entries are generated with `xorriso`.
 - **Developer tools preinstalled** — `curl`, `git`, `zsh`, and [patchsplit](https://github.com/zitzhen/patchsplit) (from the `ppa:zitzhen/patchsplit` PPA).
 - **ZhenTo Desktop Installer** — the `ubuntu-desktop-bootstrap` snap from [zhento-desktop-install](https://github.com/zitzhen/zhento-desktop-install) is seeded into the image. On a live system it is installed directly; inside the `chroot` a one-shot systemd unit finishes the installation on first boot.
@@ -55,6 +56,11 @@ The whole image is assembled by shell scripts — the old dependency on Cubic ha
 ├── edit-grub/
 │   ├── grub.cfg              # ZhenTo GRUB menu
 │   └── replace-grub.sh       # Install the menu into a target grub.cfg (with backup)
+├── edit-icon/
+│   ├── edit-icon.sh          # Install brand icons + wallpaper into an unpacked root
+│   ├── generate-icons.sh     # Maintenance tool: regenerate icons from sources (needs ImageMagick)
+│   ├── sources/              # Original brand PNGs (short logo + full banner)
+│   └── files/pixmaps/        # Pre-generated brand icons, committed to git
 ├── edit-os-release/
 │   ├── os-release            # ZhenTo /etc/os-release branding
 │   └── edit.sh               # Install the file into /etc/os-release
@@ -112,8 +118,20 @@ On success, `out/zhenTo-<VERSION>-amd64.iso` and its `.md5` file are produced. I
 | `KEEP_WORK` | `0` | Set to `1` to keep intermediate files for debugging |
 | `SQUASHFS_COMP` | inherited | Squashfs compression (`zstd` is much faster than `xz`) |
 | `SQUASHFS_BLOCK` | inherited | Squashfs block size (usually `131072`) |
+| `ICON_SRC_DIR` | `<repo>/edit-icon/sources` | Brand icon source directory (short + full PNG) |
 
 The build script refuses to run if `VERSION` does not match `edit-os-release/os-release`, so branding never drifts from the release number.
+
+### Brand Assets
+
+The brand artwork lives in [zitzhen/zhenTo-icon](https://github.com/zitzhen/zhenTo-icon) and is vendored into `edit-icon/sources/`:
+
+| File | Source | SHA256 |
+|---|---|---|
+| `zhento-short.png` | `zhento短图标.png` (548×545) | `e6d3cbedf49f04319c0a5709d3469411d8a1357bb18f971e93d4bc9faa64513e` |
+| `zhento-full.png` | `zhento.png` (1774×887) | `2f2949680a77be8c1d050d4741a91fb9b5dd0834473ca8e6f1ba7095a398ff5d` |
+
+The short logo replaces the seven `ubuntu-logo*` / `debian-logo*` slots in `/usr/share/pixmaps/`; the full banner is added as `/usr/share/backgrounds/zhento.png`. Other icons in the image are left untouched. The PNG/SVG files in `edit-icon/files/pixmaps/` are **pre-generated and committed**, so the build needs no ImageMagick and no network access. To regenerate them after an artwork change, run `./edit-icon/generate-icons.sh` (requires ImageMagick) and commit the result. The `-text-dark` variants reuse the light artwork because no separate dark asset exists.
 
 ## Using the ISO
 

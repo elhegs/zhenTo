@@ -21,25 +21,28 @@ ZhenTo 是一款基于 **Ubuntu 26.04.1 LTS "Resolute Raccoon"** 定制的 Linux
 
 ## 目录
 
-- [特性](#特性)
-- [仓库结构](#仓库结构)
-- [构建 ISO](#构建-iso)
-  - [准备工作](#准备工作)
-  - [快速构建](#快速构建)
-  - [构建模式](#构建模式)
-  - [环境变量](#环境变量)
-- [使用 ISO](#使用-iso)
-- [下载发行版](#下载发行版)
-- [测试](#测试)
-- [持续集成](#持续集成)
-- [参与贡献](#参与贡献)
-- [许可证与致谢](#许可证与致谢)
+- [ZhenTo](#zhento)
+  - [目录](#目录)
+  - [特性](#特性)
+  - [仓库结构](#仓库结构)
+  - [构建 ISO](#构建-iso)
+    - [准备工作](#准备工作)
+    - [快速构建](#快速构建)
+    - [构建模式](#构建模式)
+    - [环境变量](#环境变量)
+    - [品牌素材](#品牌素材)
+  - [使用 ISO](#使用-iso)
+  - [下载发行版](#下载发行版)
+  - [测试](#测试)
+  - [持续集成](#持续集成)
+  - [参与贡献](#参与贡献)
+  - [许可证与致谢](#许可证与致谢)
 
 ---
 
 ## 特性
 
-- **品牌重塑** —— `/etc/os-release` 和 GRUB 启动菜单均标识为 ZhenTo。
+- **品牌重塑** —— `/etc/os-release`、GRUB 启动菜单、`/usr/share/pixmaps/` 中的品牌图标以及 ZhenTo 壁纸均标识为 ZhenTo。
 - **仅 UEFI 镜像** —— 向 ISO 追加单个 EFI 系统分区，并使用 `xorriso` 生成启动项。
 - **预装开发工具** —— `curl`、`git`、`zsh` 和 [patchsplit](https://github.com/zitzhen/patchsplit)（来自 `ppa:zitzhen/patchsplit` PPA）。
 - **ZhenTo 桌面安装器** —— 来自 [zhento-desktop-install](https://github.com/zitzhen/zhento-desktop-install) 的 `ubuntu-desktop-bootstrap` snap 被预置到镜像中。在真实系统中直接安装；在 `chroot` 内则通过一次性 systemd 服务在首次启动时完成安装。
@@ -55,11 +58,16 @@ ZhenTo 是一款基于 **Ubuntu 26.04.1 LTS "Resolute Raccoon"** 定制的 Linux
 ├── edit-grub/
 │   ├── grub.cfg              # ZhenTo GRUB 菜单
 │   └── replace-grub.sh       # 将菜单写入目标 grub.cfg（自动备份）
+├── edit-icon/
+│   ├── edit-icon.sh          # 将品牌图标与壁纸写入解压后的根目录
+│   ├── generate-icons.sh     # 维护工具：从素材重新生成图标（需 ImageMagick）
+│   ├── sources/              # 原始品牌 PNG（短图标 + 完整横幅）
+│   └── files/pixmaps/        # 预生成的品牌图标，已提交进 git
 ├── edit-os-release/
 │   ├── os-release            # ZhenTo /etc/os-release 品牌信息
 │   └── edit.sh               # 将文件写入 /etc/os-release
 ├── install-app/
-│   ├── ppa.list              # 构建时启用的额外 PPA
+│   ├── ppa.list              #     # 维护期工具（build.sh 不调用）：构建时启用的额外 PPA
 │   ├── curl.sh, git.sh, zsh.sh, patchsplit.sh
 │   └── Installer.sh          # ZhenTo 桌面安装器（snap）配置
 ├── scripts/
@@ -112,8 +120,20 @@ sudo BASE_ISO=/path/to/ubuntu-26.04.1-desktop-amd64.iso ./build.sh
 | `KEEP_WORK` | `0` | 设为 `1` 以保留中间文件用于调试 |
 | `SQUASHFS_COMP` | 继承原值 | Squashfs 压缩算法（`zstd` 比 `xz` 快得多） |
 | `SQUASHFS_BLOCK` | 继承原值 | Squashfs 块大小（通常为 `131072`） |
+| `ICON_SRC_DIR` | `<repo>/edit-icon/sources` | 品牌图标素材目录（短图标 + 完整横幅 PNG） |
 
 如果 `VERSION` 与 `edit-os-release/os-release` 中的版本不一致，构建脚本将拒绝运行，从而确保品牌信息不会与版本号脱节。
+
+### 品牌素材
+
+品牌图稿来自 [zitzhen/zhenTo-icon](https://github.com/zitzhen/zhenTo-icon)，已随仓库存放在 `edit-icon/sources/`：
+
+| 文件 | 来源 | SHA256 |
+|---|---|---|
+| `zhento-short.png` | `zhento短图标.png`（548×545） | `e6d3cbedf49f04319c0a5709d3469411d8a1357bb18f971e93d4bc9faa64513e` |
+| `zhento-full.png` | `zhento.png`（1774×887） | `2f2949680a77be8c1d050d4741a91fb9b5dd0834473ca8e6f1ba7095a398ff5d` |
+
+短图标替换 `/usr/share/pixmaps/` 下的 7 个 `ubuntu-logo*` / `debian-logo*` 品牌位；完整横幅作为 `/usr/share/backgrounds/zhento.png` 新增壁纸。镜像中的其他图标保持不变。`edit-icon/files/pixmaps/` 中的 PNG/SVG 文件是**预生成并提交进 git** 的，因此构建时无需 ImageMagick、也无需联网。图稿变更后运行 `./edit-icon/generate-icons.sh`（需 ImageMagick）重新生成并提交即可。由于没有单独的暗色素材，`-text-dark` 变体复用浅色图稿。
 
 ## 使用 ISO
 
