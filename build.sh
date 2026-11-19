@@ -19,6 +19,7 @@
 #   KEEP_WORK      1 to keep intermediate files for debugging
 #   SQUASHFS_COMP  Squashfs compression algorithm (default inherited from original layer, e.g. xz; zstd is much faster)
 #   SQUASHFS_BLOCK Squashfs block size (default inherited from original layer, usually 131072)
+#   ICON_SRC_DIR   Brand icon source directory (default <repo>/edit-icon/sources)
 #
 # Note: Ubuntu 26.04 desktop ISO uses layered squashfs (described in casper/install-sources.yaml).
 # By default only the base layer of the "default install source" is modified; the language layer
@@ -38,6 +39,7 @@ PATCH_LAYERS=${PATCH_LAYERS:-auto}
 KEEP_WORK=${KEEP_WORK:-0}
 SQUASHFS_COMP=${SQUASHFS_COMP:-}
 SQUASHFS_BLOCK=${SQUASHFS_BLOCK:-}
+ICON_SRC_DIR=${ICON_SRC_DIR:-"$SELF_DIR/edit-icon/sources"}
 
 ISO_NAME="zhenTo-${VERSION}-amd64.iso"
 ISO_DIR="$WORK_DIR/iso"
@@ -96,6 +98,12 @@ preflight_checks() {
         "$SELF_DIR/edit-hostname/hostname" \
         "$SELF_DIR/edit-hosts/edit-hosts.sh" \
         "$SELF_DIR/edit-hosts/hosts" \
+        "$SELF_DIR/edit-icon/edit-icon.sh" \
+        "$SELF_DIR/edit-icon/files/pixmaps/ubuntu-logo.svg" \
+        "$SELF_DIR/edit-icon/files/pixmaps/ubuntu-logo-text.png" \
+        "$SELF_DIR/edit-icon/files/pixmaps/debian-logo.png" \
+        "$ICON_SRC_DIR/zhento-short.png" \
+        "$ICON_SRC_DIR/zhento-full.png" \
         "$SELF_DIR/install-app/ppa.list"; do
         [ -f "$f" ] || die "Missing build input: $f"
     done
@@ -377,6 +385,24 @@ apply_hosts() {
 }
 
 # ---------------------------------------------------------------------------
+# Branding: install pre-generated brand icons + wallpaper into the unpacked
+# root. Like hostname/hosts, the installer runs on the host against $ROOT_DIR
+# and is never copied into the chroot or shipped in the final image.
+# ---------------------------------------------------------------------------
+apply_icons() {
+    local src="$SELF_DIR/edit-icon/edit-icon.sh"
+
+    [ -f "$src" ] || {
+        warn "edit-icon/edit-icon.sh is missing, skipping icons"
+        return 0
+    }
+
+    log "Writing brand icons and wallpaper"
+    ICON_SRC_DIR="$ICON_SRC_DIR" sh "$src" "$ROOT_DIR" ||
+        die "Failed to write brand icons"
+}
+
+# ---------------------------------------------------------------------------
 # Boot menu: replace boot/grub/grub.cfg in the ISO tree with the config from edit-grub/
 # ---------------------------------------------------------------------------
 apply_grub() {
@@ -483,6 +509,7 @@ patch_layer() {
     apply_os_release
     apply_hostname
     apply_hosts
+    apply_icons
 
     log "Cleaning up build-time artifacts"
     rm -rf "$ROOT_DIR/opt/zhento-build"
