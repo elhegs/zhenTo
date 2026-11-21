@@ -1,0 +1,8 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "GPG key fingerprints are public identifiers"
+regexes = [
+  '''(?i)KEY_FINGERPRINT\s*=\s*"?[A-F0-9]{40}"?'''
+]
