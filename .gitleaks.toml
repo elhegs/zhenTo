@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "GPG key fingerprints are public identifiers"
+
+stopwords = [
+  "3B310141DFDBDE77A802C0627DFBD414F81DC0BB",
+]
