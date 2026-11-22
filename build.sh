@@ -102,6 +102,10 @@ preflight_checks() {
         "$SELF_DIR/edit-hostname/hostname" \
         "$SELF_DIR/edit-hosts/edit-hosts.sh" \
         "$SELF_DIR/edit-hosts/hosts" \
+        "$SELF_DIR/edit-etc-default-useradd/edit-etc-default-useradd.sh" \
+        "$SELF_DIR/edit-etc-default-useradd/useradd" \
+        "$SELF_DIR/edit-etc-default-useradd/.zshrc" \
+        "$SELF_DIR/edit-terminal/edit-terminal.sh" \
         "$SELF_DIR/edit-icon/edit-icon.sh" \
         "$SELF_DIR/edit-icon/files/pixmaps/ubuntu-logo.svg" \
         "$SELF_DIR/edit-icon/files/pixmaps/ubuntu-logo-text.png" \
@@ -416,6 +420,55 @@ apply_hosts() {
 }
 
 # ---------------------------------------------------------------------------
+# Default login shell for accounts created after installation:
+# /etc/default/useradd gets ZhenTo's SHELL=/bin/zsh. Runs on the host against
+# $ROOT_DIR, so nothing extra is copied into the image.
+# ---------------------------------------------------------------------------
+apply_useradd_defaults() {
+    local src="$SELF_DIR/edit-etc-default-useradd/edit-etc-default-useradd.sh"
+
+    [ -f "$src" ] || {
+        warn "edit-etc-default-useradd/edit-etc-default-useradd.sh is missing, skipping /etc/default/useradd"
+        return 0
+    }
+
+    log "Writing /etc/default/useradd (new accounts use zsh)"
+    sh "$src" "$ROOT_DIR/etc/default/useradd" ||
+        die "Failed to write /etc/default/useradd"
+}
+
+# ---------------------------------------------------------------------------
+# Existing accounts: rewrite the login shell in /etc/passwd to zsh and install
+# the ZhenTo .zshrc (Starship) into /etc/skel and every existing home directory.
+# Runs inside the chroot as root so the passwd it edits is the image's own.
+# Both payload trees go under /opt/zhento-build and are deleted with the rest
+# of the build-time artifacts, so nothing extra ships in the image.
+# ---------------------------------------------------------------------------
+apply_terminal() {
+    local src="$SELF_DIR/edit-terminal"
+    local dst=/opt/zhento-build/edit-terminal
+    local config_src="$SELF_DIR/edit-etc-default-useradd"
+    local config_dst=/opt/zhento-build/edit-etc-default-useradd
+
+    [ -f "$src/edit-terminal.sh" ] || {
+        warn "edit-terminal/edit-terminal.sh is missing, skipping login shells"
+        return 0
+    }
+    [ -f "$config_src/.zshrc" ] || {
+        warn "edit-etc-default-useradd/.zshrc is missing, skipping login shells"
+        return 0
+    }
+
+    log "Switching existing accounts to zsh and installing .zshrc"
+    rm -rf "$ROOT_DIR$dst" "$ROOT_DIR$config_dst"
+    cp -a "$src" "$ROOT_DIR$dst"
+    cp -a "$config_src" "$ROOT_DIR$config_dst"
+    chroot "$ROOT_DIR" /bin/sh -c \
+        "cd $dst && ZSHRC_SRC=$config_dst/.zshrc ./edit-terminal.sh" ||
+        die "Failed to switch login shells to zsh"
+}
+
+# ---------------------------------------------------------------------------
 # Branding: install pre-generated brand icons + wallpaper into the unpacked
 # root. Like hostname/hosts, the installer runs on the host against $ROOT_DIR
 # and is never copied into the chroot or shipped in the final image.
@@ -561,6 +614,8 @@ patch_layer() {
     apply_os_release
     apply_hostname
     apply_hosts
+    apply_useradd_defaults
+    apply_terminal
     apply_icons
     apply_backgrounds
 

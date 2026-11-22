@@ -45,6 +45,7 @@ ZhenTo 是一款基于 **Ubuntu 26.04.1 LTS "Resolute Raccoon"** 定制的 Linux
 - **品牌重塑** —— `/etc/os-release`、GRUB 启动菜单、`/usr/share/pixmaps/` 中的品牌图标以及 ZhenTo 壁纸均标识为 ZhenTo。
 - **仅 UEFI 镜像** —— 向 ISO 追加单个 EFI 系统分区，并使用 `xorriso` 生成启动项。
 - **预装开发工具** —— `curl`、`git`、`zsh` 和 [patchsplit](https://github.com/zitzhen/patchsplit)（来自 `ppa:zitzhen/patchsplit` PPA）。
+- **所有用户默认使用 zsh** —— 现有用户切换为 `/bin/zsh` 并写入初始化 Starship 的 `.zshrc`，`/etc/default/useradd` 让新用户同样使用 zsh。
 - **ZhenTo 桌面安装器** —— 来自 [zhento-desktop-install](https://github.com/zitzhen/zhento-desktop-install) 的 `ubuntu-desktop-bootstrap` snap 被预置到镜像中。在真实系统中直接安装；在 `chroot` 内则通过一次性 systemd 服务在首次启动时完成安装。
 - **感知分层的补丁机制** —— 仅修改默认安装源的基础 squashfs 层，语言层和 enhanced-secureboot 覆盖层保持不变。
 - **校验和与验证** —— 重新生成 `md5sum.txt`，CI 为每个发行版发布 MD5 和 SHA256 校验文件。
@@ -57,6 +58,10 @@ ZhenTo 是一款基于 **Ubuntu 26.04.1 LTS "Resolute Raccoon"** 定制的 Linux
 ├── build.sh                  # 主 ISO 构建脚本（解压 → chroot → 重新打包）
 ├── edit-backgrounds/
 │   └── edit-backgrounds.sh   # 从 GitHub Releases 下载 ZhenTo 壁纸并设为 GNOME 默认壁纸
+├── edit-etc-default-useradd/
+│   ├── edit-etc-default-useradd.sh # 将 SHELL=/bin/zsh 写入 /etc/default/useradd（新用户）
+│   ├── useradd               # ZhenTo /etc/default/useradd
+│   └── .zshrc                # ZhenTo ~/.zshrc，初始化 Starship
 ├── edit-grub/
 │   ├── grub.cfg              # ZhenTo GRUB 菜单
 │   └── replace-grub.sh       # 将菜单写入目标 grub.cfg（自动备份）
@@ -68,6 +73,8 @@ ZhenTo 是一款基于 **Ubuntu 26.04.1 LTS "Resolute Raccoon"** 定制的 Linux
 ├── edit-os-release/
 │   ├── os-release            # ZhenTo /etc/os-release 品牌信息
 │   └── edit.sh               # 将文件写入 /etc/os-release
+├── edit-terminal/
+│   └── edit-terminal.sh      # 将所有现有用户的默认终端改为 zsh，并写入 ZhenTo .zshrc
 ├── install-app/
 │   ├── ppa.list              #     # 维护期工具（build.sh 不调用）：构建时启用的额外 PPA
 │   ├── curl.sh, git.sh, zsh.sh, patchsplit.sh
@@ -127,6 +134,16 @@ sudo BASE_ISO=/path/to/ubuntu-26.04.1-desktop-amd64.iso ./build.sh
 | `WALLPAPER_TAG` | `zhenTo-coffee-1.0.0` | 壁纸 Release 标签（资产 SHA256 已在安装器中固定） |
 
 如果 `VERSION` 与 `edit-os-release/os-release` 中的版本不一致，构建脚本将拒绝运行，从而确保品牌信息不会与版本号脱节。
+
+### 默认终端
+
+镜像中所有用户的登录终端都是 **zsh**，`~/.zshrc` 负责初始化 Starship：
+
+- `edit-terminal/edit-terminal.sh` 在 `chroot` 内运行，改写 `/etc/passwd`：`root` 以及所有普通用户（uid ≥ 1000）的登录 shell 改为 `/bin/zsh`；系统账号和已锁定为 `nologin`/`false` 的账号保持不变。
+- 同一脚本把 `edit-etc-default-useradd/.zshrc` 写入 `/etc/skel/.zshrc` 以及每个已存在的家目录。原有 `.zshrc` 会保留为 `.zshrc.bak.<时间戳>`，新写入的副本沿用该账号的 uid/gid。
+- `edit-etc-default-useradd/edit-etc-default-useradd.sh` 直接覆盖 `/etc/default/useradd`（不做合并），写入 `SHELL=/bin/zsh`，因此之后由安装器、`useradd` 或 `adduser` 创建的账号默认也是 zsh。
+
+两个脚本同样可以直接对真实系统或已解压的根目录运行：`sudo ./edit-terminal/edit-terminal.sh [<root>]`、`sudo ./edit-etc-default-useradd/edit-etc-default-useradd.sh [<target>]`。它们都不会被打进最终镜像。
 
 ### 品牌素材
 

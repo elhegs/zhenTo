@@ -43,6 +43,7 @@ The whole image is assembled by shell scripts — the old dependency on Cubic ha
 - **Rebranded identity** — `/etc/os-release`, the GRUB boot menu, the brand icons in `/usr/share/pixmaps/`, and a ZhenTo wallpaper all identify the system as ZhenTo.
 - **UEFI-only image** — a single EFI system partition is appended to the ISO; boot entries are generated with `xorriso`.
 - **Developer tools preinstalled** — `curl`, `git`, `zsh`, and [patchsplit](https://github.com/zitzhen/patchsplit) (from the `ppa:zitzhen/patchsplit` PPA).
+- **zsh for every account** — existing accounts are switched to `/bin/zsh` with a Starship-enabled `.zshrc`, and `/etc/default/useradd` gives new accounts the same shell.
 - **ZhenTo Desktop Installer** — the `ubuntu-desktop-bootstrap` snap from [zhento-desktop-install](https://github.com/zitzhen/zhento-desktop-install) is seeded into the image. On a live system it is installed directly; inside the `chroot` a one-shot systemd unit finishes the installation on first boot.
 - **Layer-aware patching** — only the base squashfs layer of the default install source is modified. Language and enhanced-secureboot overlay layers are left untouched.
 - **Checksums and verification** — `md5sum.txt` is regenerated, and CI publishes MD5 and SHA256 files for every release.
@@ -55,6 +56,10 @@ The whole image is assembled by shell scripts — the old dependency on Cubic ha
 ├── build.sh                  # Main ISO build script (unpack → chroot → repack)
 ├── edit-backgrounds/
 │   └── edit-backgrounds.sh   # Download ZhenTo wallpapers from GitHub Releases and set as GNOME default
+├── edit-etc-default-useradd/
+│   ├── edit-etc-default-useradd.sh # Write SHELL=/bin/zsh into /etc/default/useradd (new accounts)
+│   ├── useradd               # ZhenTo /etc/default/useradd
+│   └── .zshrc                # ZhenTo ~/.zshrc with the Starship prompt
 ├── edit-grub/
 │   ├── grub.cfg              # ZhenTo GRUB menu
 │   └── replace-grub.sh       # Install the menu into a target grub.cfg (with backup)
@@ -66,6 +71,8 @@ The whole image is assembled by shell scripts — the old dependency on Cubic ha
 ├── edit-os-release/
 │   ├── os-release            # ZhenTo /etc/os-release branding
 │   └── edit.sh               # Install the file into /etc/os-release
+├── edit-terminal/
+│   └── edit-terminal.sh      # Switch every existing account to zsh and install the ZhenTo .zshrc
 ├── install-app/
 │   ├── ppa.list              # Extra PPAs to enable during the build
 │   ├── curl.sh, git.sh, zsh.sh, patchsplit.sh
@@ -125,6 +132,16 @@ On success, `out/zhenTo-<VERSION>-amd64.iso` and its `.md5` file are produced. I
 | `WALLPAPER_TAG` | `zhenTo-coffee-1.0.0` | Wallpaper Release tag (assets are checksum-pinned in the installer) |
 
 The build script refuses to run if `VERSION` does not match `edit-os-release/os-release`, so branding never drifts from the release number.
+
+### Default Shell
+
+Every account on the image uses **zsh**, with the Starship prompt initialised from `~/.zshrc`:
+
+- `edit-terminal/edit-terminal.sh` runs inside the `chroot` and rewrites `/etc/passwd`: the login shell of `root` and of every regular account (uid ≥ 1000) becomes `/bin/zsh`. System accounts and accounts already pinned to `nologin`/`false` are left alone.
+- The same script installs `edit-etc-default-useradd/.zshrc` into `/etc/skel/.zshrc` and into every existing home directory. A pre-existing `.zshrc` is kept as `.zshrc.bak.<timestamp>`, and the installed copy keeps the account's uid/gid.
+- `edit-etc-default-useradd/edit-etc-default-useradd.sh` overwrites `/etc/default/useradd` with `SHELL=/bin/zsh` (no merging), so accounts created later — by the installer, `useradd` or `adduser` — start with zsh too.
+
+Both scripts also run against a real system or an unpacked root: `sudo ./edit-terminal/edit-terminal.sh [<root>]` and `sudo ./edit-etc-default-useradd/edit-etc-default-useradd.sh [<target>]`. Neither is shipped in the final image.
 
 ### Brand Assets
 
