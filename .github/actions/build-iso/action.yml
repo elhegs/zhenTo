@@ -7,7 +7,7 @@ description: Build the UEFI-only ZhenTo ISO, verify it and split it into release
 # and packaging. It is intentionally free of release logic, so the same step can
 # be reused by a nightly build, a fork, or a manual `workflow_dispatch` run.
 
-author: ZIT Studio
+author: elhegs <elhegawa@gmail.com>
 
 branding:
   icon: package
